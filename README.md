@@ -297,11 +297,6 @@ Primary research directions include:
 - Evaluation of audio-domain data augmentation strategies.
 - Comparison of in-domain and participant-held-out performance.
 
-
-## License
-
-No license has been specified for this repository. Add a `LICENSE` file if you intend to define permissions for reuse, modification, and distribution.
-
 ---
 
 **Ultrasonic Activity Classification** — Exploring human activity recognition through ultrasonic signal processing and deep learning.
