@@ -82,7 +82,7 @@ Each valid activity segment is divided into consecutive audio frames.
 The FFT is applied to each frame to extract frequency-domain magnitude features within the ultrasonic frequency band.
 
 | Parameter          | Value |
-
+|--|--|
 | Frame duration     | 0.05 seconds |
 | Samples per frame  | 2,400 |
 | FFT size | 4,096   |
@@ -109,7 +109,7 @@ Each selected augmentation produces a separate sample derived from the original 
 ### Supported Methods
 
 | Augmentation | Description | Configuration |
-
+|--|--|--|
 | Temporal scaling | Changes activity duration while preserving pitch | Rate: 0.90–1.10 |
 | Band-limited noise | Adds ultrasonic noise at a controlled signal-to-noise ratio | SNR: 40–50 dB |
 | Pitch shifting | Shifts signal frequencies using an analytic-signal representation | ±24 Hz |
@@ -158,7 +158,7 @@ The bidirectional architecture allows the model to learn temporal relationships 
 ### Training Configuration
 
 | Hyperparameter          | Value |
-
+|--|--|
 | Model                   | Stacked BiLSTM |
 | LSTM units              | 64 per direction, per layer |
 | LSTM layers             | 2 |
@@ -252,7 +252,7 @@ python main.py --data_path ./data --experiment leave_one_out --participant_id Et
 ### Command-Line Arguments
 
 | Argument | Description | Default |
-
+|--|--|--|
 | `--data_path` | Path to the dataset directory | Required |
 | `--experiment` | `in_domain` or `leave_one_out` | `in_domain` |
 | `--participant_id` | Identifier used to select the held-out participant | `None` |
