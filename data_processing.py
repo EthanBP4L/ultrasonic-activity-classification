@@ -7,6 +7,79 @@ from scipy.signal import butter, lfilter
 import soundfile as sf
 import resampy
 import matplotlib.pyplot as plt
+import random
+
+from data_augmentation import (
+    new_freq_lti_optimized205,
+    new_freq_lti_optimized195,
+    time_stretch_fixed_sr,
+    add_band_limited_noise,
+    pitch_shift_analytic,
+)
+
+
+def augment_activity(segment, sr=48000, methods=None):
+    """
+    Apply selected augmentations to one activity segment.
+
+    Parameters
+    ----------
+    segment : np.ndarray
+        Audio samples for one detected activity.
+    sr : int
+        Sampling rate.
+    methods : list[str] or None
+        Augmentations to apply.
+
+    Returns
+    -------
+    np.ndarray
+        Augmented audio segment.
+    """
+    if methods is None:
+        methods = []
+    all_augmented_segments = []
+    augmented = segment.copy()
+
+    for method in methods:
+        if method == "time_stretch":
+            stretch_factor = round(
+                random.uniform(0.9, 1.1), 2
+            )
+            all_augmented_segments.append(time_stretch_fixed_sr(
+                augmented, sr, stretch_factor
+            ))
+           
+
+        elif method == "noise":
+            snr_db = round(random.uniform(40, 50), 2)
+            all_augmented_segments.append(add_band_limited_noise(
+                augmented, sr, snr_db
+            ))
+
+
+        elif method == "pitch_shift":
+            shift_hz = round(random.uniform(-24, 24), 2)
+            all_augmented_segments.append(pitch_shift_analytic(
+                augmented, sr, shift_hz
+            ))
+
+        elif method == "carrier_205":
+            all_augmented_segments.append(new_freq_lti_optimized205(
+                augmented, sr
+            ))
+
+        elif method == "carrier_195":
+            all_augmented_segments.append(new_freq_lti_optimized195(
+                augmented, sr
+            ))
+
+        else:
+            raise ValueError(
+                f"Unknown augmentation method: {method}"
+            )
+
+    return all_augmented_segments
 
 
 def butter_bandpass(lowcut, highcut, sr, order = 5):
@@ -142,7 +215,7 @@ def split_reps_walk(magnitude, time):
   return end_times, start_times
 
 
-def extract_features(y, start_times, end_times, label):
+def extract_features(y, start_times, end_times, label, augment = False, augmentation_methods = None):
   all_bins20 = []
   labels = []
 
@@ -185,12 +258,38 @@ def extract_features(y, start_times, end_times, label):
       all_bins20.append(all_bins_temp20)
 
       labels.append(label)
+    
+      if augment:
+        augmented_segments = augment_activity(
+        segment20,
+        sr=48000,
+        methods=augmentation_methods
+        )
+
+        for augmented_segment in augmented_segments:
+          augmented_bins = []
+
+          for j in range(20):
+
+            new_segment_augment = augmented_segment[j*2400:(j+1)*2400]
+            fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+            frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+            low_bin = np.where(frequencies >= low_freq20)[0][0]
+            high_bin = np.where(frequencies <= high_freq20)[0][-1]
+            relevant_fft = fft_result[low_bin:high_bin]
+
+
+            augmented_bins.append(relevant_fft)
+
+          all_bins20.append(augmented_bins)
+          labels.append(label)
+
 
   return all_bins20,labels
 
 #Same as previouse exctraction
 
-def extract_features_walk(y, start_times, end_times, label):
+def extract_features_walk(y, start_times, end_times, label, augment = False, augmentation_methods = None):
   all_bins20 = []
 
   labels = []
@@ -231,12 +330,37 @@ def extract_features_walk(y, start_times, end_times, label):
       all_bins20.append(all_bins_temp20)
       labels.append(label)
 
+      if augment:
+        augmented_segments = augment_activity(
+        segment20,
+        sr=48000,
+        methods=augmentation_methods
+        )
+
+        for augmented_segment in augmented_segments:
+          augmented_bins = []
+
+          for j in range(20):
+
+            new_segment_augment = augmented_segment[j*2400:(j+1)*2400]
+            fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+            frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+            low_bin = np.where(frequencies >= low_freq20)[0][0]
+            high_bin = np.where(frequencies <= high_freq20)[0][-1]
+            relevant_fft = fft_result[low_bin:high_bin]
+
+
+            augmented_bins.append(relevant_fft)
+
+          all_bins20.append(augmented_bins)
+          labels.append(label)
+
 
   return all_bins20, labels
 
 #sit/stand is different because activities performed on the same file with pattern
 #sit - stand - sit - stand, so every other activity will be a sit/stand repectively
-def extract_features_sit(y, start_times, end_times, label1, label2):
+def extract_features_sit(y, start_times, end_times, label1, label2, augment = False, augmentation_methods = None):
   all_bins20 = []
 
   labels = []
@@ -281,6 +405,31 @@ def extract_features_sit(y, start_times, end_times, label1, label2):
 
         labels.append(label1)
 
+        if augment:
+          augmented_segments = augment_activity(
+          segment20,
+          sr=48000,
+          methods=augmentation_methods
+          )
+
+          for augmented_segment in augmented_segments:
+            augmented_bins = []
+
+            for j in range(20):
+
+              new_segment_augment = augmented_segment[j*2400:(j+1)*2400]
+              fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+              frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+              low_bin = np.where(frequencies >= low_freq20)[0][0]
+              high_bin = np.where(frequencies <= high_freq20)[0][-1]
+              relevant_fft = fft_result[low_bin:high_bin]
+
+
+              augmented_bins.append(relevant_fft)
+
+            all_bins20.append(augmented_bins)
+            labels.append(label1)
+
 
       #this would be a stand
       elif i%2 == 0:
@@ -312,6 +461,31 @@ def extract_features_sit(y, start_times, end_times, label1, label2):
 
         labels.append(label2)
 
+        if augment:
+          augmented_segments = augment_activity(
+          segment20,
+          sr=48000,
+          methods=augmentation_methods
+          )
+
+          for augmented_segment in augmented_segments:
+            augmented_bins = []
+
+            for j in range(20):
+
+              new_segment_augment = augmented_segment[j*2400:(j+1)*2400]
+              fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+              frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+              low_bin = np.where(frequencies >= low_freq20)[0][0]
+              high_bin = np.where(frequencies <= high_freq20)[0][-1]
+              relevant_fft = fft_result[low_bin:high_bin]
+
+
+              augmented_bins.append(relevant_fft)
+
+            all_bins20.append(augmented_bins)
+            labels.append(label2)
+
 
   return all_bins20, labels
 
@@ -342,7 +516,7 @@ def plot_start_end(start_times, end_times, magnitude, time):
   plt.show()
 
 #reads audio file names and assigns class
-def process_activity_file(filename):
+def process_activity_file(filename, augment = False, augmentation_methods = None):
 
   individual_labels = []
   labels = []
@@ -355,7 +529,7 @@ def process_activity_file(filename):
     end_times, start_times = split_reps(magnitude, time, 0.5)
     #plot_start_end(start_times, end_times, magnitude, time)
 
-    all_bins20, labels = extract_features(y, start_times, end_times, 0)
+    all_bins20, labels = extract_features(y, start_times, end_times, 0, augment, augmentation_methods)
     for i in range (len(labels)):
       
       individual_labels.append(filename)
@@ -366,7 +540,7 @@ def process_activity_file(filename):
     end_times, start_times = split_reps(magnitude, time, 0.5)
     #plot_start_end(start_times, end_times, magnitude, time)
 
-    all_bins20, labels = extract_features_sit(y, start_times, end_times, 7, 8)
+    all_bins20, labels = extract_features_sit(y, start_times, end_times, 7, 8, augment, augmentation_methods)
     for i in range (len(labels)):
       
       individual_labels.append(filename)
@@ -378,7 +552,7 @@ def process_activity_file(filename):
     end_times, start_times = split_reps_walk(magnitude, time)
     #plot_start_end(start_times, end_times, magnitude, time)
 
-    all_bins20, labels = extract_features_walk(y, start_times, end_times, 9)
+    all_bins20, labels = extract_features_walk(y, start_times, end_times, 9, augment, augmentation_methods)
     for i in range (len(labels)):
 
       individual_labels.append(filename)
@@ -389,7 +563,7 @@ def process_activity_file(filename):
     end_times, start_times = split_reps_walk(magnitude, time)
     #plot_start_end(start_times, end_times, magnitude, time)
 
-    all_bins20, labels = extract_features_walk(y, start_times, end_times, 10)
+    all_bins20, labels = extract_features_walk(y, start_times, end_times, 10, augment, augmentation_methods)
     for i in range (len(labels)):
 
       individual_labels.append(filename)
@@ -400,7 +574,7 @@ def process_activity_file(filename):
     time, magnitude, y = get_magnitudes(filename)
     end_times, start_times = split_reps(magnitude, time)
     #plot_start_end(start_times, end_times, magnitude, time)
-    all_bins20, labels = extract_features(y, start_times, end_times, 1)
+    all_bins20, labels = extract_features(y, start_times, end_times, 1, augment, augmentation_methods)
     for i in range (len(labels)):
 
       individual_labels.append(filename)
@@ -411,7 +585,7 @@ def process_activity_file(filename):
     time, magnitude, y = get_magnitudes(filename)
     end_times, start_times = split_reps(magnitude, time, 0.5)
     #plot_start_end(start_times, end_times, magnitude, time)
-    all_bins20, labels = extract_features(y, start_times, end_times, 2)
+    all_bins20, labels = extract_features(y, start_times, end_times, 2, augment, augmentation_methods)
     for i in range (len(labels)):
 
       individual_labels.append(filename)
@@ -421,7 +595,7 @@ def process_activity_file(filename):
     time, magnitude, y = get_magnitudes(filename)
     end_times, start_times = split_reps(magnitude, time)
     #plot_start_end(start_times, end_times, magnitude, time)
-    all_bins20, labels = extract_features(y, start_times, end_times, 3)
+    all_bins20, labels = extract_features(y, start_times, end_times, 3, augment, augmentation_methods)
     for i in range (len(labels)):
 
       individual_labels.append(filename)
@@ -432,7 +606,7 @@ def process_activity_file(filename):
     time, magnitude, y = get_magnitudes(filename)
     end_times, start_times = split_reps(magnitude, time)
     #plot_start_end(start_times, end_times, magnitude, time)
-    all_bins20, labels = extract_features(y, start_times, end_times, 4)
+    all_bins20, labels = extract_features(y, start_times, end_times, 4, augment, augmentation_methods)
     for i in range (len(labels)):
 
       individual_labels.append(filename)
@@ -443,7 +617,7 @@ def process_activity_file(filename):
     time, magnitude, y = get_magnitudes(filename)
     end_times, start_times = split_reps(magnitude, time)
     #plot_start_end(start_times, end_times, magnitude, time)
-    all_bins20, labels = extract_features(y, start_times, end_times, 5)
+    all_bins20, labels = extract_features(y, start_times, end_times, 5, augment, augmentation_methods)
     for i in range (len(labels)):
 
       individual_labels.append(filename)
@@ -454,7 +628,7 @@ def process_activity_file(filename):
     time, magnitude, y = get_magnitudes(filename)
     end_times, start_times = split_reps(magnitude, time)
     #plot_start_end(start_times, end_times, magnitude, time)
-    all_bins20, labels = extract_features(y, start_times, end_times, 6)
+    all_bins20, labels = extract_features(y, start_times, end_times, 6, augment, augmentation_methods)
     for i in range (len(labels)):
 
 
