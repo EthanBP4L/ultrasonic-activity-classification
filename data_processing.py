@@ -18,7 +18,7 @@ from data_augmentation import (
 )
 
 
-def augment_activity(segment, sr=48000, methods=None):
+def augment_activity(segmented_carrier_shift, segment, sr=48000, methods=None):
     """
     Apply selected augmentations to one activity segment.
 
@@ -39,6 +39,7 @@ def augment_activity(segment, sr=48000, methods=None):
     if methods is None:
         methods = []
     all_augmented_segments = []
+    carrier_list = []
     augmented = segment.copy()
 
     for method in methods:
@@ -49,6 +50,7 @@ def augment_activity(segment, sr=48000, methods=None):
             all_augmented_segments.append(time_stretch_fixed_sr(
                 augmented, sr, stretch_factor
             ))
+            carrier_list.append(0)
            
 
         elif method == "noise":
@@ -56,30 +58,53 @@ def augment_activity(segment, sr=48000, methods=None):
             all_augmented_segments.append(add_band_limited_noise(
                 augmented, sr, snr_db
             ))
-
+            carrier_list.append(0)
 
         elif method == "pitch_shift":
             shift_hz = round(random.uniform(-24, 24), 2)
             all_augmented_segments.append(pitch_shift_analytic(
                 augmented, sr, shift_hz
             ))
+            carrier_list.append(0)
 
         elif method == "carrier_205":
-            all_augmented_segments.append(new_freq_lti_optimized205(
-                augmented, sr
-            ))
+            augmented_carrier_shift = new_freq_lti_optimized205(segmented_carrier_shift, sr)
+
+            lowcut205 = 19800.0
+            highcut205 = 21200.0
+
+            
+            augmented_carrier_shift = butter_bandpass_filter(augmented_carrier_shift, lowcut205, highcut205, sr)
+
+            lowcut205 = 20485.0
+            highcut205 = 20515.0
+            augmented_carrier_shift = butter_bandstop_filter(augmented_carrier_shift, lowcut205, highcut205, sr)
+
+            all_augmented_segments.append(augmented_carrier_shift)
+            carrier_list.append(1)
 
         elif method == "carrier_195":
-            all_augmented_segments.append(new_freq_lti_optimized195(
-                augmented, sr
-            ))
+            augmented_carrier_shift = new_freq_lti_optimized195(segmented_carrier_shift, sr)
+
+            lowcut195 = 18800.0
+            highcut195 = 20200.0
+
+            
+            augmented_carrier_shift = butter_bandpass_filter(augmented_carrier_shift, lowcut195, highcut195, sr)
+
+            lowcut195 = 19485.0
+            highcut195 = 19515.0
+            augmented_carrier_shift = butter_bandstop_filter(augmented_carrier_shift, lowcut195, highcut195, sr)
+
+            all_augmented_segments.append(augmented_carrier_shift)
+            carrier_list.append(2)
 
         else:
             raise ValueError(
                 f"Unknown augmentation method: {method}"
             )
 
-    return all_augmented_segments
+    return all_augmented_segments, carrier_list
 
 
 def butter_bandpass(lowcut, highcut, sr, order = 5):
@@ -223,6 +248,10 @@ def extract_features(y, start_times, end_times, label, augment = False, augmenta
   #these will be used for bandpass filter for LTI augmentation
   low_freq20 = 19300
   high_freq20 = 20700
+  low_freq205 = 19800
+  high_freq205 = 21200
+  low_freq195 = 18800
+  high_freq195 = 20200
   sr = 48000
   for i in range(len(start_times)):
     all_bins_temp20 = []
@@ -255,32 +284,64 @@ def extract_features(y, start_times, end_times, label, augment = False, augmenta
         relevant_fft = fft_result[low_bin:high_bin]
         all_bins_temp20.append(relevant_fft)
 
+      all_bins_temp20 = np.array(all_bins_temp20)
+      all_bins_temp20 = all_bins_temp20[:16, :118]
       all_bins20.append(all_bins_temp20)
 
       labels.append(label)
     
       if augment:
-        augmented_segments = augment_activity(
+        segment_carrier_shift = y[int(96000+start_times[i]*48000):int(96000+end_times[i]*48000)]
+        augmented_segments, carrier_list = augment_activity(
+        segment_carrier_shift,
         segment20,
         sr=48000,
         methods=augmentation_methods
         )
 
-        for augmented_segment in augmented_segments:
+        for i in range (len(augmented_segments)):
           augmented_bins = []
 
-          for j in range(20):
+          if carrier_list[i] == 0:
+            for j in range(20):
 
-            new_segment_augment = augmented_segment[j*2400:(j+1)*2400]
-            fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
-            frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
-            low_bin = np.where(frequencies >= low_freq20)[0][0]
-            high_bin = np.where(frequencies <= high_freq20)[0][-1]
-            relevant_fft = fft_result[low_bin:high_bin]
+              new_segment_augment = augmented_segments[i][j*2400:(j+1)*2400]
+              fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+              frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+              low_bin = np.where(frequencies >= low_freq20)[0][0]
+              high_bin = np.where(frequencies <= high_freq20)[0][-1]
+              relevant_fft = fft_result[low_bin:high_bin]
 
 
-            augmented_bins.append(relevant_fft)
+              augmented_bins.append(relevant_fft)
 
+          if carrier_list[i] == 1:
+            for j in range(20):
+
+              new_segment_augment = augmented_segments[i][j*2400:(j+1)*2400]
+              fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+              frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+              low_bin = np.where(frequencies >= low_freq205)[0][0]
+              high_bin = np.where(frequencies <= high_freq205)[0][-1]
+              relevant_fft = fft_result[low_bin:high_bin]
+
+
+              augmented_bins.append(relevant_fft)
+
+          if carrier_list[i] == 2:
+            for j in range(20):
+
+              new_segment_augment = augmented_segments[i][j*2400:(j+1)*2400]
+              fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+              frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+              low_bin = np.where(frequencies >= low_freq195)[0][0]
+              high_bin = np.where(frequencies <= high_freq195)[0][-1]
+              relevant_fft = fft_result[low_bin:high_bin]
+
+
+              augmented_bins.append(relevant_fft)
+          augmented_bins = np.array(augmented_bins)
+          augmented_bins = augmented_bins[:16, :118]
           all_bins20.append(augmented_bins)
           labels.append(label)
 
@@ -295,6 +356,11 @@ def extract_features_walk(y, start_times, end_times, label, augment = False, aug
   labels = []
   low_freq20 = 19300
   high_freq20 = 20700
+  low_freq205 = 19800
+  high_freq205 = 21200
+  low_freq195 = 18800
+  high_freq195 = 20200
+
   sr = 48000
   for i in range(len(start_times)):
 
@@ -326,32 +392,63 @@ def extract_features_walk(y, start_times, end_times, label, augment = False, aug
         relevant_fft = fft_result[low_bin:high_bin]
         all_bins_temp20.append(relevant_fft)
 
-
+      all_bins_temp20 = np.array(all_bins_temp20)
+      all_bins_temp20 = all_bins_temp20[:16, :118]
       all_bins20.append(all_bins_temp20)
       labels.append(label)
 
       if augment:
-        augmented_segments = augment_activity(
+        segment_carrier_shift = y[int(96000+start_times[i]*48000):int(96000+end_times[i]*48000)]
+        augmented_segments, carrier_list = augment_activity(
+        segment_carrier_shift,
         segment20,
         sr=48000,
         methods=augmentation_methods
         )
 
-        for augmented_segment in augmented_segments:
+        for i in range (len(augmented_segments)):
           augmented_bins = []
 
-          for j in range(20):
+          if carrier_list[i] == 0:
+            for j in range(20):
 
-            new_segment_augment = augmented_segment[j*2400:(j+1)*2400]
-            fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
-            frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
-            low_bin = np.where(frequencies >= low_freq20)[0][0]
-            high_bin = np.where(frequencies <= high_freq20)[0][-1]
-            relevant_fft = fft_result[low_bin:high_bin]
+              new_segment_augment = augmented_segments[i][j*2400:(j+1)*2400]
+              fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+              frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+              low_bin = np.where(frequencies >= low_freq20)[0][0]
+              high_bin = np.where(frequencies <= high_freq20)[0][-1]
+              relevant_fft = fft_result[low_bin:high_bin]
 
 
-            augmented_bins.append(relevant_fft)
+              augmented_bins.append(relevant_fft)
 
+          if carrier_list[i] == 1:
+            for j in range(20):
+
+              new_segment_augment = augmented_segments[i][j*2400:(j+1)*2400]
+              fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+              frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+              low_bin = np.where(frequencies >= low_freq205)[0][0]
+              high_bin = np.where(frequencies <= high_freq205)[0][-1]
+              relevant_fft = fft_result[low_bin:high_bin]
+
+
+              augmented_bins.append(relevant_fft)
+
+          if carrier_list[i] == 2:
+            for j in range(20):
+
+              new_segment_augment = augmented_segments[i][j*2400:(j+1)*2400]
+              fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+              frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+              low_bin = np.where(frequencies >= low_freq195)[0][0]
+              high_bin = np.where(frequencies <= high_freq195)[0][-1]
+              relevant_fft = fft_result[low_bin:high_bin]
+
+
+              augmented_bins.append(relevant_fft)
+          augmented_bins = np.array(augmented_bins)
+          augmented_bins = augmented_bins[:16, :118]
           all_bins20.append(augmented_bins)
           labels.append(label)
 
@@ -366,6 +463,10 @@ def extract_features_sit(y, start_times, end_times, label1, label2, augment = Fa
   labels = []
   low_freq20 = 19300
   high_freq20 = 20700
+  low_freq205 = 19800
+  high_freq205 = 21200
+  low_freq195 = 18800
+  high_freq195 = 20200
 
   sr = 48000
   for i in range(len(start_times)):
@@ -401,32 +502,64 @@ def extract_features_sit(y, start_times, end_times, label1, label2, augment = Fa
           relevant_fft = fft_result[low_bin:high_bin]
           all_bins_temp20.append(relevant_fft)
 
+        all_bins_temp20 = np.array(all_bins_temp20)
+        all_bins_temp20 = all_bins_temp20[:16, :118]
         all_bins20.append(all_bins_temp20)
 
         labels.append(label1)
 
         if augment:
-          augmented_segments = augment_activity(
+          segment_carrier_shift = y[int(96000+start_times[i]*48000):int(96000+end_times[i]*48000)]
+          augmented_segments, carrier_list = augment_activity(
+          segment_carrier_shift,
           segment20,
           sr=48000,
           methods=augmentation_methods
           )
 
-          for augmented_segment in augmented_segments:
+          for i in range (len(augmented_segments)):
             augmented_bins = []
 
-            for j in range(20):
+            if carrier_list[i] == 0:
+              for j in range(20):
 
-              new_segment_augment = augmented_segment[j*2400:(j+1)*2400]
-              fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
-              frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
-              low_bin = np.where(frequencies >= low_freq20)[0][0]
-              high_bin = np.where(frequencies <= high_freq20)[0][-1]
-              relevant_fft = fft_result[low_bin:high_bin]
+                new_segment_augment = augmented_segments[i][j*2400:(j+1)*2400]
+                fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+                frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+                low_bin = np.where(frequencies >= low_freq20)[0][0]
+                high_bin = np.where(frequencies <= high_freq20)[0][-1]
+                relevant_fft = fft_result[low_bin:high_bin]
 
 
-              augmented_bins.append(relevant_fft)
+                augmented_bins.append(relevant_fft)
 
+            if carrier_list[i] == 1:
+              for j in range(20):
+
+                new_segment_augment = augmented_segments[i][j*2400:(j+1)*2400]
+                fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+                frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+                low_bin = np.where(frequencies >= low_freq205)[0][0]
+                high_bin = np.where(frequencies <= high_freq205)[0][-1]
+                relevant_fft = fft_result[low_bin:high_bin]
+
+
+                augmented_bins.append(relevant_fft)
+
+            if carrier_list[i] == 2:
+              for j in range(20):
+
+                new_segment_augment = augmented_segments[i][j*2400:(j+1)*2400]
+                fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+                frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+                low_bin = np.where(frequencies >= low_freq195)[0][0]
+                high_bin = np.where(frequencies <= high_freq195)[0][-1]
+                relevant_fft = fft_result[low_bin:high_bin]
+
+
+                augmented_bins.append(relevant_fft)
+            augmented_bins = np.array(augmented_bins)
+            augmented_bins = augmented_bins[:16, :118]
             all_bins20.append(augmented_bins)
             labels.append(label1)
 
@@ -457,32 +590,65 @@ def extract_features_sit(y, start_times, end_times, label1, label2, augment = Fa
           relevant_fft = fft_result[low_bin:high_bin]
           all_bins_temp20.append(relevant_fft)
 
+        all_bins_temp20 = np.array(all_bins_temp20)
+        all_bins_temp20 = all_bins_temp20[:16, :118]
         all_bins20.append(all_bins_temp20)
 
         labels.append(label2)
 
         if augment:
-          augmented_segments = augment_activity(
+          segment_carrier_shift = y[int(96000+start_times[i]*48000):int(96000+end_times[i]*48000)]
+          augmented_segments, carrier_list = augment_activity(
+          segment_carrier_shift,
           segment20,
           sr=48000,
           methods=augmentation_methods
           )
 
-          for augmented_segment in augmented_segments:
+          for i in range (len(augmented_segments)):
             augmented_bins = []
 
-            for j in range(20):
+            if carrier_list[i] == 0:
+              for j in range(20):
 
-              new_segment_augment = augmented_segment[j*2400:(j+1)*2400]
-              fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
-              frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
-              low_bin = np.where(frequencies >= low_freq20)[0][0]
-              high_bin = np.where(frequencies <= high_freq20)[0][-1]
-              relevant_fft = fft_result[low_bin:high_bin]
+                new_segment_augment = augmented_segments[i][j*2400:(j+1)*2400]
+                fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+                frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+                low_bin = np.where(frequencies >= low_freq20)[0][0]
+                high_bin = np.where(frequencies <= high_freq20)[0][-1]
+                relevant_fft = fft_result[low_bin:high_bin]
 
 
-              augmented_bins.append(relevant_fft)
+                augmented_bins.append(relevant_fft)
 
+            if carrier_list[i] == 1:
+              for j in range(20):
+
+                new_segment_augment = augmented_segments[i][j*2400:(j+1)*2400]
+                fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+                frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+                low_bin = np.where(frequencies >= low_freq205)[0][0]
+                high_bin = np.where(frequencies <= high_freq205)[0][-1]
+                relevant_fft = fft_result[low_bin:high_bin]
+
+
+                augmented_bins.append(relevant_fft)
+
+            if carrier_list[i] == 2:
+              for j in range(20):
+
+                new_segment_augment = augmented_segments[i][j*2400:(j+1)*2400]
+                fft_result = np.abs(np.fft.fft(new_segment_augment, 4096))
+                frequencies = np.fft.fftfreq(4096, 1/sr)[:4096//2]
+                low_bin = np.where(frequencies >= low_freq195)[0][0]
+                high_bin = np.where(frequencies <= high_freq195)[0][-1]
+                relevant_fft = fft_result[low_bin:high_bin]
+
+
+                augmented_bins.append(relevant_fft)
+
+            augmented_bins = np.array(augmented_bins)
+            augmented_bins = augmented_bins[:16, :118]
             all_bins20.append(augmented_bins)
             labels.append(label2)
 

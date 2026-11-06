@@ -188,7 +188,7 @@ def main():
     print(f"Testing labels: {y_test.shape}")
     print(f"Testing individuals: {individuals_test.shape}")
 
-        # Create a fresh model for this experiment
+    # Create a fresh model for this experiment
     model = create_model(
         input_shape=X_train.shape[1:],
         num_classes=11
