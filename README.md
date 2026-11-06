@@ -124,9 +124,10 @@ The augmentation implementations are located in `data_augmentation.py`.
 
 The classification model uses a regularized, stacked Bidirectional LSTM architecture implemented with TensorFlow/Keras.
 
-### Architecture
 
-'''text
+### Model Architecture
+
+```text
 Input: (16, 118)
        |
        v
@@ -151,9 +152,10 @@ Dense (11, Softmax)
        |
        v
 Predicted Activity Class
-'''
+```
 
 The bidirectional architecture allows the model to learn temporal relationships in both directions across consecutive FFT frames.
+
 
 ### Training Configuration
 
