@@ -61,7 +61,7 @@ Preprocessing includes:
 For recordings centered at 20 kHz, the primary filtering configuration is:
 
 | Parameter         | Value |
-
+|--|--|
 | Sampling rate     | 48,000 Hz |
 | Bandpass range    | 19,300–20,700 Hz |
 | Bandstop range    | 19,985–20,015 Hz |
