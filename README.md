@@ -126,7 +126,7 @@ The classification model uses a regularized, stacked Bidirectional LSTM architec
 
 ### Architecture
 
-
+'''text
 Input: (16, 118)
        |
        v
@@ -151,7 +151,7 @@ Dense (11, Softmax)
        |
        v
 Predicted Activity Class
-
+'''
 
 The bidirectional architecture allows the model to learn temporal relationships in both directions across consecutive FFT frames.
 
